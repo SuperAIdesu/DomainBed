@@ -21,6 +21,7 @@ DATASETS = [
     # Small images
     "ColoredMNIST",
     "RotatedMNIST",
+    "RotatedMNISTShuffled",
     # Big images
     "VLCS",
     "PACS",
@@ -174,6 +175,101 @@ class RotatedMNIST(MultipleEnvironmentMNIST):
         y = labels.view(-1)
 
         return TensorDataset(x, y)
+
+
+class MultipleEnvironmentMNISTPoisoned(MultipleDomainDataset):
+    def __init__(self, root, environments, dataset_transform, input_shape,
+                 num_classes):
+        super().__init__()
+        if root is None:
+            raise ValueError('Data directory not specified!')
+
+        original_dataset_tr = MNIST(root, train=True, download=True)
+        original_dataset_te = MNIST(root, train=False, download=True)
+
+        original_images = torch.cat((original_dataset_tr.data,
+                                     original_dataset_te.data))
+
+        original_labels = torch.cat((original_dataset_tr.targets,
+                                     original_dataset_te.targets))
+
+        shuffle = torch.randperm(len(original_images))
+
+        original_images = original_images[shuffle]
+        original_labels = original_labels[shuffle]
+
+        self.datasets = []
+
+        for i in range(len(environments)):
+            images = original_images[i::len(environments)]
+            labels = original_labels[i::len(environments)]
+            self.datasets.append(dataset_transform(images, labels, environments[i], original_images, original_labels))
+
+        self.input_shape = input_shape
+        self.num_classes = num_classes
+
+
+
+class RotatedMNISTShuffled(MultipleEnvironmentMNIST):
+    ENVIRONMENTS = ['0', '15', '30', '45', '60', '75']
+    STRENGTH = 0.5
+    ADD_ANGLE = 30
+
+    def __init__(self, root, test_envs, hparams):
+        super(RotatedMNISTShuffled, self).__init__(root, [0, 15, 30, 45, 60, 75],
+                                           self.rotate_dataset, (1, 28, 28,), 10)
+
+    def rotate_dataset(self, images, labels, angle):
+        rotation = lambda a: transforms.Compose([
+            transforms.ToPILImage(),
+            transforms.Lambda(lambda x: rotate(x, a, fill=(0,),
+                interpolation=torchvision.transforms.InterpolationMode.BILINEAR)),
+            transforms.ToTensor()])
+
+        x = torch.zeros(len(images), 1, 28, 28)
+        shuffle_n = round(self.STRENGTH*len(images))
+
+        for i in range(len(images)):
+            if i <= shuffle_n:
+                x[i] = rotation((angle+self.ADD_ANGLE)%90)(images[i])
+            else:
+                x[i] = rotation(angle)(images[i])
+
+        y = labels.view(-1)
+
+        return TensorDataset(x, y)
+
+
+class RotatedMNISTWatermarked(MultipleEnvironmentMNISTPoisoned):
+    ENVIRONMENTS = ['0', '15', '30', '45', '60', '75']
+    STRENGTH = 0.5
+    WM_OPACITY = 0.2
+    ADD_ANGLE = 30
+
+    def __init__(self, root, test_envs, hparams):
+        super(RotatedMNISTWatermarked, self).__init__(root, [0, 15, 30, 45, 60, 75],
+                                           self.rotate_dataset, (1, 28, 28,), 10)
+
+    def rotate_dataset(self, images, labels, angle, full_images, full_labels):
+        rotation = lambda a: transforms.Compose([
+            transforms.ToPILImage(),
+            transforms.Lambda(lambda x: rotate(x, a, fill=(0,),
+                interpolation=torchvision.transforms.InterpolationMode.BILINEAR)),
+            transforms.ToTensor()])
+
+        x = torch.zeros(len(images), 1, 28, 28)
+        shuffle_n = round(self.STRENGTH*len(images))
+
+        for i in range(len(images)):
+            if i <= shuffle_n:
+                x[i] = rotation((angle+self.ADD_ANGLE)%90)(images[i])
+            else:
+                x[i] = rotation(angle)(images[i])
+
+        y = labels.view(-1)
+
+        return TensorDataset(x, y)
+
 
 
 class MultipleEnvironmentImageFolder(MultipleDomainDataset):

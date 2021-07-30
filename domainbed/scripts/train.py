@@ -18,6 +18,7 @@ import torch.utils.data
 from domainbed import datasets
 from domainbed import hparams_registry
 from domainbed import algorithms
+# from domainbed import attack
 from domainbed.lib import misc
 from domainbed.lib.fast_data_loader import InfiniteDataLoader, FastDataLoader
 
@@ -48,6 +49,7 @@ if __name__ == "__main__":
         help="For domain adaptation, % of test to use unlabeled for training.")
     parser.add_argument('--skip_model_save', action='store_true')
     parser.add_argument('--save_model_every_checkpoint', action='store_true')
+    parser.add_argument('--attack', type=str, default=None)
     args = parser.parse_args()
 
     # If we ever want to implement checkpointing, just persist these values
@@ -100,6 +102,9 @@ if __name__ == "__main__":
             args.test_envs, hparams)
     else:
         raise NotImplementedError
+
+    # if args.attack:
+        # dataset = attack.attack_training(dataset, args.dataset, args.test_envs, args.attack)
 
     # Split each env into an 'in-split' and an 'out-split'. We'll train on
     # each in-split except the test envs, and evaluate on all splits.
